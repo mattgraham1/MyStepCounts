@@ -6,6 +6,9 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TableLayout;
@@ -14,6 +17,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.fitness.Fitness;
@@ -32,6 +36,7 @@ import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -41,8 +46,9 @@ public class MainFragment extends Fragment {
 
   private TableLayout mTableLayout;
   private TextView mErrorTextView;
+  private MainViewModel mViewModel;
 
-  private FitnessOptions mFitnessOptions = FitnessOptions.builder()
+  private final FitnessOptions mFitnessOptions = FitnessOptions.builder()
       .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
       .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
       .build();
@@ -51,11 +57,16 @@ public class MainFragment extends Fragment {
     return new MainFragment();
   }
 
+  @Override public void onCreate(@Nullable Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setHasOptionsMenu(true);
+  }
+
   @Nullable @Override
   public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
       @Nullable Bundle savedInstanceState) {
     View view = inflater.inflate(R.layout.main_fragment, container, false);
-
+    mViewModel = new ViewModelProvider(this).get(MainViewModel.class);
     mTableLayout = view.findViewById(R.id.tableLayout);
     mErrorTextView = view.findViewById(R.id.textViewErrorMessage);
 
@@ -69,7 +80,8 @@ public class MainFragment extends Fragment {
   @Override public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
     if (resultCode == Activity.RESULT_OK) {
       if (requestCode == GOOGLE_FIT_PERMISSIONS_REQUEST_CODE) {
-        // Google Fit access granted.
+        // Google Fit access granted. Could remove this code, but it's nice to have when checking if
+        // the permissions were granted.
       }
     }
   }
@@ -91,11 +103,35 @@ public class MainFragment extends Fragment {
     }
   }
 
+  @Override public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+    inflater.inflate(R.menu.toolbar_menu, menu);
+    super.onCreateOptionsMenu(menu, inflater);
+  }
+
+  @Override public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+    if (item.getItemId() == R.id.action_sort) {
+      // Get the data sorted properly
+      if (mViewModel != null) {
+        if (mViewModel.isDataSortedInDescendingOrder()) {
+          mViewModel.sortMapInAscendingOrder();
+        } else {
+          mViewModel.sortMapInDescendingOrder();
+        }
+
+        buildTable();
+      }
+      return true;
+    }
+
+    return super.onOptionsItemSelected(item);
+  }
+
   /***
    * Method to read daily step counts from Google Fit API.
    * @param fitnessOptions Fitness Option for Google Fit API
    */
   private void getDailyStepCountsFromGoogleFit(FitnessOptions fitnessOptions) {
+    // Create the start and end times for the date range
     Calendar cal = Calendar.getInstance();
     cal.setTime(new Date());
     long endTime = cal.getTimeInMillis();
@@ -126,8 +162,8 @@ public class MainFragment extends Fragment {
                 String stepCount = "0";
                 Date bucketStart = new Date(bucket.getStartTime(TimeUnit.MILLISECONDS));
                 Date bucketEnd = new Date(bucket.getEndTime(TimeUnit.MILLISECONDS));
-                Log.d(TAG, "Bucket start / end times: " +  dateFormat.format(bucketStart) + " - " +
-                    dateFormat.format(bucketEnd));
+                Log.d(TAG, "Bucket start / end times: " +  dateFormat.format(bucketStart)
+                    + " - " + dateFormat.format(bucketEnd));
 
                 List<DataSet> dataSets = bucket.getDataSets();
                 for (DataSet set : dataSets) {
@@ -140,7 +176,10 @@ public class MainFragment extends Fragment {
                   }
                 }
 
-                mTableLayout.addView(createTableRow(dateFormat.format(bucketStart), stepCount), 0);
+                // Add the data
+                if (mViewModel != null) {
+                  mViewModel.addDailyStepCount(dateFormat.format(bucketStart), stepCount);
+                }
               }
 
               // Update current day step count
@@ -160,7 +199,9 @@ public class MainFragment extends Fragment {
    * Method to read current days total step count.
    */
   private void readDailyTotalSteps() {
-    GoogleSignInAccount account = GoogleSignIn.getAccountForExtension(getActivity(),
+    final DateFormat dateFormat = DateFormat.getDateInstance();
+    GoogleSignInAccount account = GoogleSignIn.getAccountForExtension(
+        Objects.requireNonNull(getActivity()),
         mFitnessOptions);
 
     Fitness.getHistoryClient(getActivity(), account)
@@ -178,7 +219,11 @@ public class MainFragment extends Fragment {
               }
             }
 
-            mTableLayout.addView(createTableRow("Today", dailyTotalStepCount), 0);
+            // Add the data
+            if (mViewModel != null) {
+              mViewModel.addDailyStepCount(dateFormat.format(new Date(System.currentTimeMillis())), dailyTotalStepCount);
+            }
+            buildTable();
           }
         })
         .addOnFailureListener(new OnFailureListener() {
@@ -190,7 +235,21 @@ public class MainFragment extends Fragment {
   }
 
   /***
-   * Helper method to help dynamically rows, with two textviews inside of it.
+   * Method to get the data from the viewmodel and then build the TableLayout.
+   */
+  private void buildTable() {
+    int index = 0;
+    if (mViewModel != null) {
+      mTableLayout.removeAllViews();
+      for (Map.Entry<String, String> entry : mViewModel.getFitnessData().entrySet()) {
+        mTableLayout.addView(createTableRow(entry.getKey(), entry.getValue()), index);
+        index++;
+      }
+    }
+  }
+
+  /***
+   * Method to help dynamically rows, with two textviews inside of it.
    * @param date String to represent a Date
    * @param stepCount String to indicate number of steps to display
    * @return Newly create TableRow

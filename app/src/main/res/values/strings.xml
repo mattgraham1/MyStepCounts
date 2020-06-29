@@ -1,4 +1,5 @@
 <resources>
   <string name="app_name">My Step Counts</string>
   <string name="error_message">Error, unable to fetch Fitness data. Please try again later.</string>
+  <string name="action_sort">Sort</string>
 </resources>
