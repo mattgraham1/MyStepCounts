@@ -67,6 +67,7 @@ public class MainFragment extends Fragment {
       @Nullable Bundle savedInstanceState) {
     View view = inflater.inflate(R.layout.main_fragment, container, false);
     mViewModel = new ViewModelProvider(this).get(MainViewModel.class);
+
     mTableLayout = view.findViewById(R.id.tableLayout);
     mErrorTextView = view.findViewById(R.id.textViewErrorMessage);
 
@@ -178,7 +179,7 @@ public class MainFragment extends Fragment {
 
                 // Add the data
                 if (mViewModel != null) {
-                  mViewModel.addDailyStepCount(dateFormat.format(bucketStart), stepCount);
+                  mViewModel.addDailyStepCount(bucketStart, stepCount);
                 }
               }
 
@@ -199,7 +200,6 @@ public class MainFragment extends Fragment {
    * Method to read current days total step count.
    */
   private void readDailyTotalSteps() {
-    final DateFormat dateFormat = DateFormat.getDateInstance();
     GoogleSignInAccount account = GoogleSignIn.getAccountForExtension(
         Objects.requireNonNull(getActivity()),
         mFitnessOptions);
@@ -221,8 +221,11 @@ public class MainFragment extends Fragment {
 
             // Add the data
             if (mViewModel != null) {
-              mViewModel.addDailyStepCount(dateFormat.format(new Date(System.currentTimeMillis())), dailyTotalStepCount);
+              mViewModel.addDailyStepCount(new Date(System.currentTimeMillis()), dailyTotalStepCount);
             }
+
+            // Ensure we have the date in descending order and then build the table.
+            mViewModel.sortMapInDescendingOrder();
             buildTable();
           }
         })
@@ -238,11 +241,13 @@ public class MainFragment extends Fragment {
    * Method to get the data from the viewmodel and then build the TableLayout.
    */
   private void buildTable() {
+    final DateFormat dateFormat = DateFormat.getDateInstance();
+
     int index = 0;
     if (mViewModel != null) {
       mTableLayout.removeAllViews();
-      for (Map.Entry<String, String> entry : mViewModel.getFitnessData().entrySet()) {
-        mTableLayout.addView(createTableRow(entry.getKey(), entry.getValue()), index);
+      for (Map.Entry<Date, String> entry : mViewModel.getFitnessData().entrySet()) {
+        mTableLayout.addView(createTableRow(dateFormat.format(entry.getKey()), entry.getValue()), index);
         index++;
       }
     }
