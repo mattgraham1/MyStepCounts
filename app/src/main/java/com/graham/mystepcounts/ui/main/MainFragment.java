@@ -156,6 +156,7 @@ public class MainFragment extends Fragment {
         .readData(readRequest)
         .addOnSuccessListener(new OnSuccessListener<DataReadResponse>() {
           @Override public void onSuccess(DataReadResponse response) {
+            mViewModel.clearData();
             showErrorMessage(false);
 
             if (!response.getBuckets().isEmpty()) {
@@ -225,7 +226,10 @@ public class MainFragment extends Fragment {
             }
 
             // Ensure we have the date in descending order and then build the table.
-            mViewModel.sortMapInDescendingOrder();
+            if (mViewModel != null) {
+              mViewModel.sortMapInDescendingOrder();
+            }
+
             buildTable();
           }
         })

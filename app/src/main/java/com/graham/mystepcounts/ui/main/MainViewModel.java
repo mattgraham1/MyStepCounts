@@ -24,6 +24,13 @@ public class MainViewModel extends ViewModel {
   }
 
   /***
+   * Method to clear the data in the map.
+   */
+  public void clearData() {
+    mDailyStepCountMap.clear();
+  }
+
+  /***
    * Method to get the fitness data.
    * @return Map of data
    */
