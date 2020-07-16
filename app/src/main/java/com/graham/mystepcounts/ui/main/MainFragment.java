@@ -25,6 +25,7 @@ import com.google.android.gms.fitness.FitnessOptions;
 import com.google.android.gms.fitness.data.Bucket;
 import com.google.android.gms.fitness.data.DataPoint;
 import com.google.android.gms.fitness.data.DataSet;
+import com.google.android.gms.fitness.data.DataSource;
 import com.google.android.gms.fitness.data.DataType;
 import com.google.android.gms.fitness.data.Field;
 import com.google.android.gms.fitness.request.DataReadRequest;
@@ -33,6 +34,7 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.graham.mystepcounts.R;
 import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -51,6 +53,13 @@ public class MainFragment extends Fragment {
   private final FitnessOptions mFitnessOptions = FitnessOptions.builder()
       .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
       .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
+      .build();
+
+  private final DataSource ESTIMATED_STEP_DELTAS = new DataSource.Builder()
+      .setDataType(DataType.TYPE_STEP_COUNT_DELTA)
+      .setType(DataSource.TYPE_DERIVED)
+      .setStreamName("estimated_steps")
+      .setAppPackageName("com.google.android.gms")
       .build();
 
   public static MainFragment newInstance() {
@@ -135,16 +144,19 @@ public class MainFragment extends Fragment {
     // Create the start and end times for the date range
     Calendar cal = Calendar.getInstance();
     cal.setTime(new Date());
+    cal.set(Calendar.HOUR_OF_DAY, 0);
+    cal.set(Calendar.MINUTE, 0);
+    cal.set(Calendar.SECOND, 0);
     long endTime = cal.getTimeInMillis();
     cal.add(Calendar.DAY_OF_YEAR, -13);
     long startTime = cal.getTimeInMillis();
 
-    final DateFormat dateFormat = DateFormat.getDateInstance();
+    final DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
     Log.d(TAG, "Date Start: " + dateFormat.format(startTime));
     Log.d(TAG, "Date End: " + dateFormat.format(endTime));
 
     DataReadRequest readRequest = new DataReadRequest.Builder()
-        .aggregate(DataType.TYPE_STEP_COUNT_DELTA, DataType.AGGREGATE_STEP_COUNT_DELTA)
+        .aggregate(ESTIMATED_STEP_DELTAS, DataType.AGGREGATE_STEP_COUNT_DELTA)
         .bucketByTime(1, TimeUnit.DAYS)
         .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
         .build();
@@ -170,7 +182,9 @@ public class MainFragment extends Fragment {
                 List<DataSet> dataSets = bucket.getDataSets();
                 for (DataSet set : dataSets) {
                   List<DataPoint> dataPoints = set.getDataPoints();
+                  Log.d(TAG, "dataset: " + set.getDataType().getName());
                   for (DataPoint dp : dataPoints) {
+                    Log.d(TAG, "datapoint: " + dp.getDataType().getName());
                     for (Field field : dp.getDataType().getFields()) {
                       stepCount = dp.getValue(field).toString();
                       Log.d(TAG, "Field: " + field.getName() + " Value: " + dp.getValue(field));
@@ -214,7 +228,8 @@ public class MainFragment extends Fragment {
             List<DataPoint> dataPoints = dataSet.getDataPoints();
             String dailyTotalStepCount = "0";
             for (DataPoint dp : dataPoints) {
-              for (Field field : dp.getDataType().getFields()) {
+              List<Field> fields = dp.getDataType().getFields();
+              for (Field field : fields) {
                 Log.d(TAG, "Field: " + field.getName() + " Value: " + dp.getValue(field));
                 dailyTotalStepCount = dp.getValue(field).toString();
               }
